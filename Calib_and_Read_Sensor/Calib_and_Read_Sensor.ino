@@ -52,8 +52,8 @@ void setup() {
     display.print("Error initializing IMU: ");
     display.println(err);
     display.display();
-    Serial.print("Error initializing IMU: ");
-    Serial.println(err);
+    // Serial.print("Error initializing IMU: ");
+    // Serial.println(err);
     while (true) {
       ;
     }
@@ -125,5 +125,7 @@ void loop() {
   display.print(accelData.accelY);
   display.setCursor(90, 20);
   display.print(accelData.accelZ);
+  display.setCursor(25, 40);
+  display.print("Loggin Data");
   display.display();
 }

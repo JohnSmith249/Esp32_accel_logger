@@ -1,0 +1,2 @@
+https://www.arduino.cc/reference/en/libraries/sd/write/
+https://arduinogetstarted.com/reference/library/arduino-file.print
