@@ -12,6 +12,8 @@
 #define SCREEN_WIDTH 128  // OLED display width, in pixels
 #define SCREEN_HEIGHT 64  // OLED display height, in pixels
 BMI160 IMU;
+float dataBuf[512];
+int counter = 0;
 
 String DataFileName = "DataLog.txt";
 
@@ -22,19 +24,84 @@ MagData magData;
 
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
 
+void sdStatus() {
+  display.clearDisplay();
+  display.setCursor(5, 10);
+  display.print("Initializing SD Card");
+  display.display();
+  delay(2000);
+  if (!SD.begin()) {
+    display.clearDisplay();
+    display.setCursor(25, 20);
+    display.print("SDCard module");
+    display.setCursor(12, 40);
+    display.print("Initialize failed");
+    display.display();
+    // Serial.println("SDCard module initialize failed");
+    return;
+  } else {
+    display.clearDisplay();
+    display.setCursor(25, 20);
+    display.print("SDCard module");
+    display.setCursor(12, 40);
+    display.print("Initialize success");
+    display.display();
+    delay(2000);
+  }
+  uint8_t cardType = SD.cardType();
+
+  if (cardType = CARD_NONE) {
+    display.clearDisplay();
+    display.setCursor(5, 20);
+    display.print("No SD Card Detected");
+    display.display();
+    delay(2000);
+    // Serial.println("No SD Card Detected");
+    return;
+  }
+
+  // Serial.print("SD Card Type: ");
+  display.clearDisplay();
+  display.setCursor(15, 20);
+  display.print("SD Card Type: ");
+  display.setCursor(25, 40);
+  if (cardType == CARD_MMC) {
+    display.print("MMC");
+  } else if (cardType == CARD_SD) {
+    // Serial.println("SDSC");
+    display.print("SDSC");
+  } else if (cardType == CARD_SDHC) {
+    // Serial.println("SDHC");
+    display.print("SDHC");
+  } else {
+    // Serial.println("UNKNOWN");
+    display.print("SDHC");
+  }
+  display.display();
+  delay(2000);
+  display.clearDisplay();
+  display.setCursor(0, 20);
+  display.print("SD Card Size: ");
+  display.setCursor(85, 20);
+  uint64_t cardSize = SD.cardSize() / (1024 * 1024);
+  Serial.printf("SD Card Size: %lluMB\n", cardSize);
+  display.print(cardSize);
+  display.display();
+}
+
 void quickLog(fs::FS &fs, const char *path, float buf[]) {
-  File file = fs.open(path, FILE_WRITE);
+  File file = fs.open(path, FILE_APPEND);
   if (!file) {
     Serial.println("Open file operation failed !!!");
     return;
   }
   size_t i;
-  for (i = 0; i < 512; i+=3) {
+  for (i = 0; i < 512; i += 3) {
     file.print(buf[i]);
     file.print(' ');
-    file.print(buf[i+1]);
+    file.print(buf[i + 1]);
     file.print(' ');
-    file.println(buf[i+2]);
+    file.println(buf[i + 2]);
   }
   file.close();
   // For debug, DO NOT ACTIVATE !!!
@@ -45,7 +112,7 @@ void setup() {
   Wire.begin();
   Wire.setClock(400000);
   Serial.begin(115200);
-
+  
   while (!Serial) {
     ;
   }
@@ -137,13 +204,17 @@ void setup() {
   // DO NOT TRIGGER UNDER ANY CIRCUMSTANCES !!!
   // writeFile(SD, "/logFile_ID.txt", "0001");
   // readFile(SD, "/logFile_ID.txt");
-
 }
+
+
 
 void loop() {
   display.clearDisplay();
   IMU.update();
   IMU.getAccel(&accelData);
+  dataBuf[counter] = accelData.accelX;
+  dataBuf[counter + 1] = accelData.accelY;
+  dataBuf[counter + 2] = accelData.accelZ;
   display.setCursor(16, 10);
   display.print("X");
   display.setCursor(58, 10);
@@ -151,147 +222,108 @@ void loop() {
   display.setCursor(100, 10);
   display.print("Z");
   display.setCursor(0, 20);
-  display.print(accelData.accelX);
+  display.print(dataBuf[counter]);
+  // 
   display.setCursor(45, 20);
-  display.print(accelData.accelY);
+  display.print(dataBuf[counter + 1]);
+  // 
   display.setCursor(90, 20);
-  display.print(accelData.accelZ);
-  display.setCursor(25, 40);
-  display.print("Loggin Data");
+  display.print(dataBuf[counter + 2]);
+  // 
+  display.setCursor(5, 40);
+  display.print("SD Capacity :");
+  display.setCursor(85, 40);
+  display.print(SD.totalBytes() / (1024 * 1024));
+  display.setCursor(5, 50);
+  display.print("SD Used :");
+  display.setCursor(85, 50);
+  display.print(SD.usedBytes() / (1024 * 1024));
   display.display();
+  Serial.print(dataBuf[counter]);
+  Serial.print(" ");
+  Serial.print(dataBuf[counter + 1]);
+  Serial.print(" ");
+  Serial.println(dataBuf[counter + 2]);
+  counter += 3;
+  if (counter >= 512) {
+    quickLog(SD, "/dataLog.txt", dataBuf);
+    memset(dataBuf, 0, 512);
+    counter = 0;
+  }
+
+  if (SD.usedBytes() >= (SD.totalBytes() / (1024 * 1024) - 500)){
+    return;
+  }
+  // Serial.println(counter);
 }
 
-void sdStatus() {
-  display.clearDisplay();
-  display.setCursor(5, 10);
-  display.print("Initializing SD Card");
-  display.display();
-  delay(2000);
-  if (!SD.begin()) {
-    display.clearDisplay();
-    display.setCursor(25, 20);
-    display.print("SDCard module");
-    display.setCursor(12, 40);
-    display.print("Initialize failed");
-    display.display();
-    // Serial.println("SDCard module initialize failed");
-    return;
-  } else {
-    display.clearDisplay();
-    display.setCursor(25, 20);
-    display.print("SDCard module");
-    display.setCursor(12, 40);
-    display.print("Initialize success");
-    display.display();
-    delay(2000);
-  }
-  uint8_t cardType = SD.cardType();
 
-  if (cardType = CARD_NONE) {
-    display.clearDisplay();
-    display.setCursor(5, 20);
-    display.print("No SD Card Detected");
-    display.display();
-    delay(2000);
-    // Serial.println("No SD Card Detected");
+void readFile(fs::FS &fs, const char *path) {
+  Serial.printf("Reading file: %s\n", path);
+
+  File file = fs.open(path);
+  if (!file) {
+    Serial.println("Failed to open file for reading");
     return;
   }
 
-  // Serial.print("SD Card Type: ");
-  display.clearDisplay();
-  display.setCursor(15, 20);
-  display.print("SD Card Type: ");
-  display.setCursor(25, 40);
-  if (cardType == CARD_MMC) {
-    display.print("MMC");
-  } else if (cardType == CARD_SD) {
-    // Serial.println("SDSC");
-    display.print("SDSC");
-  } else if (cardType == CARD_SDHC) {
-    // Serial.println("SDHC");
-    display.print("SDHC");
-  } else {
-    // Serial.println("UNKNOWN");
-    display.print("SDHC");
+  Serial.print("Read from file: ");
+  while (file.available()) {
+    Serial.write(file.read());
   }
-  display.display();
-  delay(2000);
-  display.clearDisplay();
-  display.setCursor(0, 20);
-  display.print("SD Card Size: ");
-  display.setCursor(85, 20);
-  uint64_t cardSize = SD.cardSize() / (1024 * 1024);
-  Serial.printf("SD Card Size: %lluMB\n", cardSize);
-  display.print(cardSize);
-  display.display();
+  file.close();
 }
 
-void readFile(fs::FS &fs, const char * path){
-    Serial.printf("Reading file: %s\n", path);
+void writeFile(fs::FS &fs, const char *path, const char *message) {
+  Serial.printf("Writing file: %s\n", path);
 
-    File file = fs.open(path);
-    if(!file){
-        Serial.println("Failed to open file for reading");
-        return;
-    }
-
-    Serial.print("Read from file: ");
-    while(file.available()){
-        Serial.write(file.read());
-    }
-    file.close();
-}
-
-void writeFile(fs::FS &fs, const char * path, const char * message){
-    Serial.printf("Writing file: %s\n", path);
-
-    File file = fs.open(path, FILE_WRITE);
-    if(!file){
-        Serial.println("Failed to open file for writing");
-        return;
-    }
-    if(file.print(message)){
-        Serial.println("File written");
-    } else {
-        Serial.println("Write failed");
-    }
-    file.close();
+  File file = fs.open(path, FILE_WRITE);
+  if (!file) {
+    Serial.println("Failed to open file for writing");
+    return;
+  }
+  if (file.print(message)) {
+    Serial.println("File written");
+  } else {
+    Serial.println("Write failed");
+  }
+  file.close();
 }
 
 
 // For advanced functions, DO NOT ACTIVATE !!!
-void appendFile(fs::FS &fs, const char * path, const char * message){
-    Serial.printf("Appending to file: %s\n", path);
+void appendFile(fs::FS &fs, const char *path, const char *message) {
+  Serial.printf("Appending to file: %s\n", path);
 
-    File file = fs.open(path, FILE_APPEND);
-    if(!file){
-        Serial.println("Failed to open file for appending");
-        return;
-    }
-    if(file.print(message)){
-        Serial.println("Message appended");
-    } else {
-        Serial.println("Append failed");
-    }
-    file.close();
+  File file = fs.open(path, FILE_APPEND);
+  if (!file) {
+    Serial.println("Failed to open file for appending");
+    return;
+  }
+  if (file.print(message)) {
+    Serial.println("Message appended");
+  } else {
+    Serial.println("Append failed");
+  }
+  file.close();
 }
 
-void createDir(fs::FS &fs, const char * path){
-    Serial.printf("Creating Dir: %s\n", path);
-    if(fs.mkdir(path)){
-        Serial.println("Dir created");
-    } else {
-        Serial.println("mkdir failed");
-    }
+void createDir(fs::FS &fs, const char *path) {
+  Serial.printf("Creating Dir: %s\n", path);
+  if (fs.mkdir(path)) {
+    Serial.println("Dir created");
+  } else {
+    Serial.println("mkdir failed");
+  }
 }
 
 
 // For advanced functions, DO NOT ACTIVATE !!!
-void removeDir(fs::FS &fs, const char * path){
-    Serial.printf("Removing Dir: %s\n", path);
-    if(fs.rmdir(path)){
-        Serial.println("Dir removed");
-    } else {
-        Serial.println("rmdir failed");
-    }
+void removeDir(fs::FS &fs, const char *path) {
+  Serial.printf("Removing Dir: %s\n", path);
+  if (fs.rmdir(path)) {
+    Serial.println("Dir removed");
+  } else {
+    Serial.println("rmdir failed");
+  }
 }
